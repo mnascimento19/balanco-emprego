@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: radar
+      POSTGRES_PASSWORD: radar
+      POSTGRES_DB: radar
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # roda os scripts na primeira criação do volume
+      - ./sql/schema:/docker-entrypoint-initdb.d:ro
+volumes:
+  pgdata:
