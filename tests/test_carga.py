@@ -6,19 +6,17 @@ import pytest
 from pipeline.carga import carregar_arquivo
 from pipeline.dimensoes import carregar_dimensoes
 
-RAIZ = Path(__file__).resolve().parent.parent
-LAYOUT = RAIZ / "data" / "raw" / "layout.xlsx"
-EXTRAIDO = RAIZ / "data" / "extracted" / "CAGEDMOV202510.txt"
-
-pytestmark = pytest.mark.skipif(not LAYOUT.exists(), reason="dados em data/ não baixados")
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+LAYOUT = FIXTURES / "layout.xlsx"  # dicionário oficial do CAGED (documento público)
+AMOSTRA = FIXTURES / "CAGEDMOV202510_amostra.txt"  # 1.000 linhas reais do arquivo de 2025-10
 
 
 @pytest.fixture()
 def amostra(tmp_path):
-    """Primeiras 1.000 linhas de dados do arquivo real, com 2 linhas idênticas de propósito."""
+    """1.000 linhas reais de 2025-10 (mais o cabeçalho) e 1 duplicata exata de propósito."""
     destino = tmp_path / "CAGEDMOV202510.txt"
-    with open(EXTRAIDO, encoding="utf-8") as f:
-        linhas = [next(f) for _ in range(1001)]
+    with open(AMOSTRA, encoding="utf-8") as f:
+        linhas = f.readlines()
     linhas.append(linhas[-1])  # duplicata exata: deve ser mantida
     destino.write_text("".join(linhas), encoding="utf-8")
     return destino

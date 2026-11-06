@@ -15,7 +15,11 @@ RAIZ = Path(__file__).resolve().parent.parent
 @pytest.fixture(scope="session")
 def url_banco(tmp_path_factory):
     if os.environ.get("TEST_DATABASE_URL"):
-        yield os.environ["TEST_DATABASE_URL"]
+        url = os.environ["TEST_DATABASE_URL"]
+        # Os testes fazem DROP SCHEMA public CASCADE: nunca apontar para um banco real.
+        if "test" not in url.rsplit("/", 1)[-1].split("?")[0]:
+            raise RuntimeError("TEST_DATABASE_URL deve apontar para um banco com 'test' no nome.")
+        yield url
         return
     import pixeltable_pgserver as pgserver
 
