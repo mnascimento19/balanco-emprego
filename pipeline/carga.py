@@ -5,36 +5,48 @@ Unidade de idempotência: o arquivo (tipo + competência da declaração).
 - hash diferente (governo republicou) -> apaga o arquivo antigo e reinsere, na mesma transação
 - falha no meio -> rollback, nada fica pela metade
 Linhas idênticas dentro de um arquivo são mantidas (são eventos distintos).
+
+Desempenho: o arquivo vai cru para uma tabela temporária (COPY, sem parsing em Python) e a
+conversão de tipos é feita pelo Postgres num único INSERT ... SELECT.
 """
-import csv
 import hashlib
 import re
 from pathlib import Path
 
 NOME_ARQUIVO = re.compile(r"^CAGED(MOV|FOR|EXC)(\d{6})\.txt$")
 
-# coluna da tabela -> coluna do arquivo
+# coluna da tabela -> (coluna do arquivo, expressão de conversão; {c} = coluna de staging)
 COLUNAS = [
-    ("arquivo_tipo", None),
-    ("competencia_declaracao", None),
-    ("competencia_evento", "competênciamov"),
-    ("regiao", "região"),
-    ("uf", "uf"),
-    ("municipio", "município"),
-    ("secao", "seção"),
-    ("subclasse", "subclasse"),
-    ("saldo", "saldomovimentação"),
-    ("cbo", "cbo2002ocupação"),
-    ("categoria", "categoria"),
-    ("grau_instrucao", "graudeinstrução"),
-    ("idade", "idade"),
-    ("horas_contratuais", "horascontratuais"),
-    ("raca_cor", "raçacor"),
-    ("sexo", "sexo"),
-    ("tipo_movimentacao", "tipomovimentação"),
-    ("salario", "salário"),
+    ("competencia_evento", "competênciamov", "{c}"),
+    ("regiao", "região", "{c}::smallint"),
+    ("uf", "uf", "{c}::smallint"),
+    ("municipio", "município", "{c}::integer"),
+    ("secao", "seção", "{c}"),
+    ("subclasse", "subclasse", "{c}::integer"),
+    ("saldo", "saldomovimentação", "{c}::smallint"),
+    ("cbo", "cbo2002ocupação", "{c}::integer"),
+    ("categoria", "categoria", "{c}::smallint"),
+    ("grau_instrucao", "graudeinstrução", "{c}::smallint"),
+    ("idade", "idade", "{c}::smallint"),
+    ("horas_contratuais", "horascontratuais", "replace({c}, ',', '.')::numeric"),
+    ("raca_cor", "raçacor", "{c}::smallint"),
+    ("sexo", "sexo", "{c}::smallint"),
+    ("tipo_movimentacao", "tipomovimentação", "{c}::smallint"),
+    ("salario", "salário", "replace({c}, ',', '.')::numeric"),
 ]
-DECIMAIS = {"horascontratuais", "salário"}
+
+
+# coluna da tabela de fatos -> tabela de dimensão. Validado em lote antes do INSERT, no lugar de
+# FKs (que custavam uma consulta por linha). Colunas nulas não são validadas.
+DIMENSOES_VALIDADAS = {
+    "uf": "uf",
+    "secao": "secao",
+    "categoria": "categoria",
+    "grau_instrucao": "grau_instrucao",
+    "raca_cor": "raca_cor",
+    "sexo": "sexo",
+    "tipo_movimentacao": "tipo_movimentacao",
+}
 
 
 def identificar(caminho: Path):
@@ -52,21 +64,9 @@ def sha256_arquivo(caminho: Path) -> str:
     return h.hexdigest()
 
 
-def _linhas(caminho: Path, tipo: str, competencia: str):
-    with open(caminho, encoding="utf-8", newline="") as f:
-        for reg in csv.DictReader(f, delimiter=";"):
-            saida = []
-            for col, origem in COLUNAS:
-                if origem is None:
-                    saida.append(tipo if col == "arquivo_tipo" else competencia)
-                    continue
-                v = reg[origem].strip()
-                if v == "":
-                    v = None
-                elif origem in DECIMAIS:
-                    v = v.replace(",", ".")
-                saida.append(v)
-            yield saida
+def _cabecalho(caminho: Path) -> list[str]:
+    with open(caminho, encoding="utf-8") as f:
+        return f.readline().strip().split(";")
 
 
 def carregar_arquivo(conn, caminho) -> str:
@@ -74,6 +74,14 @@ def carregar_arquivo(conn, caminho) -> str:
     caminho = Path(caminho)
     tipo, competencia = identificar(caminho)
     sha = sha256_arquivo(caminho)
+
+    cabecalho = _cabecalho(caminho)
+    posicao = {nome: f"c{i}" for i, nome in enumerate(cabecalho)}
+    faltando = [o for _, o, _ in COLUNAS if o not in posicao]
+    if faltando:
+        raise ValueError(f"Colunas ausentes no arquivo: {faltando}")
+
+    origem_de = {c: o for c, o, _ in COLUNAS}
 
     with conn.transaction():
         cur = conn.cursor()
@@ -94,12 +102,38 @@ def carregar_arquivo(conn, caminho) -> str:
             "VALUES (%s, %s, %s, %s, 0)",
             (tipo, competencia, sha, caminho.stat().st_size),
         )
-        colunas = ", ".join(c for c, _ in COLUNAS)
-        n = 0
-        with cur.copy(f"COPY movimentacao ({colunas}) FROM STDIN") as copy:
-            for linha in _linhas(caminho, tipo, competencia):
-                copy.write_row(linha)
-                n += 1
+
+        # 1) arquivo cru -> tabela temporária (tudo texto)
+        colunas_stg = ", ".join(f"c{i} text" for i in range(len(cabecalho)))
+        cur.execute(f"CREATE TEMP TABLE stg ({colunas_stg}) ON COMMIT DROP")
+        with open(caminho, "rb") as f, cur.copy(
+            "COPY stg FROM STDIN WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF8')"
+        ) as copy:
+            while bloco := f.read(1 << 20):
+                copy.write(bloco)
+
+        # 2) códigos desconhecidos nas dimensões abortam a carga (rollback)
+        expressoes = {c: e for c, _, e in COLUNAS}
+        for coluna, dim in DIMENSOES_VALIDADAS.items():
+            valor = expressoes[coluna].format(c=posicao[origem_de[coluna]])
+            cur.execute(
+                f"SELECT s.v FROM (SELECT DISTINCT {valor} AS v FROM stg) s "
+                f"LEFT JOIN {dim} d ON d.codigo = s.v WHERE s.v IS NOT NULL AND d.codigo IS NULL"
+            )
+            desconhecidos = [r[0] for r in cur.fetchall()]
+            if desconhecidos:
+                raise ValueError(f"{caminho.name}: códigos de {coluna} fora da dimensão {dim}: {desconhecidos}")
+
+        # 3) conversão de tipos e carga final, tudo dentro do Postgres
+        destino = ", ".join(["arquivo_tipo", "competencia_declaracao"] + [c for c, _, _ in COLUNAS])
+        origem = ", ".join(
+            ["%s", "%s"] + [expr.format(c=posicao[orig]) for _, orig, expr in COLUNAS]
+        )
+        cur.execute(
+            f"INSERT INTO movimentacao ({destino}) SELECT {origem} FROM stg",
+            (tipo, competencia),
+        )
+        n = cur.rowcount
         cur.execute(
             "UPDATE carga_arquivo SET linhas=%s WHERE arquivo_tipo=%s AND competencia_declaracao=%s",
             (n, tipo, competencia),

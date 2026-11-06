@@ -32,6 +32,9 @@ CREATE TABLE carga_arquivo (
 -- O arquivo não tem identificador, e há linhas idênticas (121 mil grupos em 2025-10, em geral
 -- de 2 a 6 linhas), que não são removidas: são tratadas como eventos distintos.
 -- A chave é artificial e a deduplicação acontece por arquivo, via carga_arquivo.
+-- Sem FKs para as dimensões de propósito: a checagem linha a linha custava ~90% do tempo
+-- da carga (94 s contra 3 s para 500 mil linhas). O pipeline valida os códigos contra as
+-- dimensões de uma vez só, antes de inserir (pipeline/carga.py, DIMENSOES_VALIDADAS).
 CREATE TABLE movimentacao (
     id              bigserial PRIMARY KEY,
     arquivo_tipo    text     NOT NULL,
@@ -40,19 +43,19 @@ CREATE TABLE movimentacao (
     FOREIGN KEY (arquivo_tipo, competencia_declaracao)
         REFERENCES carga_arquivo (arquivo_tipo, competencia_declaracao) ON DELETE CASCADE,
     regiao          smallint NOT NULL,            -- sem FK: existe o código 99
-    uf              smallint NOT NULL REFERENCES uf(codigo),
+    uf              smallint NOT NULL,
     municipio       integer  NOT NULL,
-    secao           char(1)  NOT NULL REFERENCES secao(codigo),
+    secao           char(1)  NOT NULL,
     subclasse       integer  NOT NULL,
     saldo           smallint NOT NULL CHECK (saldo IN (-1, 1)),
     cbo             integer,
-    categoria       smallint REFERENCES categoria(codigo),
-    grau_instrucao  smallint REFERENCES grau_instrucao(codigo),
+    categoria       smallint,
+    grau_instrucao  smallint,
     idade           smallint,                     -- 11 nulos em 2025-10
     horas_contratuais numeric(5,2),
-    raca_cor        smallint REFERENCES raca_cor(codigo),
-    sexo            smallint REFERENCES sexo(codigo),
-    tipo_movimentacao smallint REFERENCES tipo_movimentacao(codigo),
+    raca_cor        smallint,
+    sexo            smallint,
+    tipo_movimentacao smallint,
     salario         numeric(12,2),                -- no arquivo vem com vírgula decimal
     -- Efeito no saldo de empregos: uma exclusão cancela o evento, com efeito inverso
     -- (Leia-me do CAGED). Esta é a coluna que as análises devem somar.

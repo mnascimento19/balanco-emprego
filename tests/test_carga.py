@@ -61,3 +61,16 @@ def test_falha_no_meio_nao_deixa_carga_pela_metade(banco, amostra):
         carregar_arquivo(banco, amostra)
     assert contar(banco) == 0
     assert banco.execute("SELECT count(*) FROM carga_arquivo").fetchone()[0] == 0
+
+
+def test_codigo_fora_da_dimensao_aborta_a_carga(banco, amostra):
+    texto = amostra.read_text(encoding="utf-8").splitlines(keepends=True)
+    cab = texto[0].strip().split(";")
+    linha = texto[10].strip().split(";")
+    linha[cab.index("uf")] = "77"  # UF que não existe no dicionário
+    texto[10] = ";".join(linha) + chr(10)
+    amostra.write_text("".join(texto), encoding="utf-8")
+    with pytest.raises(ValueError, match="uf"):
+        carregar_arquivo(banco, amostra)
+    assert contar(banco) == 0
+    assert banco.execute("SELECT count(*) FROM carga_arquivo").fetchone()[0] == 0
