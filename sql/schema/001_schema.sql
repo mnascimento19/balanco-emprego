@@ -15,12 +15,30 @@ CREATE TABLE municipio   (codigo integer PRIMARY KEY, descricao text NOT NULL);
 CREATE TABLE subclasse   (codigo integer PRIMARY KEY, descricao text NOT NULL);
 CREATE TABLE cbo         (codigo integer PRIMARY KEY, descricao text NOT NULL);
 
--- Fatos: uma linha por movimentação (admissão ou desligamento).
--- O arquivo não tem identificador, e há linhas idênticas no mesmo mês, então a chave é
--- artificial. A idempotência vem da competência: recarregar um mês apaga e reinsere esse mês.
+-- Controle de carga: um registro por arquivo do governo (tipo + mês da declaração).
+-- É a unidade de idempotência. Se o hash do arquivo não mudou, a carga é pulada; se mudou
+-- (o governo republica arquivos), apaga as linhas daquele arquivo e reinsere, numa transação.
+CREATE TABLE carga_arquivo (
+    arquivo_tipo           text    NOT NULL CHECK (arquivo_tipo IN ('MOV', 'FOR', 'EXC')),
+    competencia_declaracao char(6) NOT NULL,       -- AAAAMM do nome do arquivo
+    sha256                 text    NOT NULL,
+    tamanho_bytes          bigint  NOT NULL,
+    linhas                 integer NOT NULL,
+    carregado_em           timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (arquivo_tipo, competencia_declaracao)
+);
+
+-- Fatos: uma linha por movimentação (admissão ou desligamento) de um arquivo.
+-- O arquivo não tem identificador, e há linhas idênticas (121 mil grupos em 2025-10, em geral
+-- de 2 a 6 linhas), que não são removidas: são tratadas como eventos distintos.
+-- A chave é artificial e a deduplicação acontece por arquivo, via carga_arquivo.
 CREATE TABLE movimentacao (
     id              bigserial PRIMARY KEY,
-    competencia     char(6)  NOT NULL,            -- AAAAMM do arquivo (competênciamov)
+    arquivo_tipo    text     NOT NULL,
+    competencia_declaracao char(6) NOT NULL,      -- mês do arquivo (competênciadec)
+    competencia_evento     char(6) NOT NULL,      -- mês em que ocorreu (competênciamov)
+    FOREIGN KEY (arquivo_tipo, competencia_declaracao)
+        REFERENCES carga_arquivo (arquivo_tipo, competencia_declaracao) ON DELETE CASCADE,
     regiao          smallint NOT NULL,            -- sem FK: existe o código 99
     uf              smallint NOT NULL REFERENCES uf(codigo),
     municipio       integer  NOT NULL,
@@ -35,7 +53,12 @@ CREATE TABLE movimentacao (
     raca_cor        smallint REFERENCES raca_cor(codigo),
     sexo            smallint REFERENCES sexo(codigo),
     tipo_movimentacao smallint REFERENCES tipo_movimentacao(codigo),
-    salario         numeric(12,2)                 -- no arquivo vem com vírgula decimal
+    salario         numeric(12,2),                -- no arquivo vem com vírgula decimal
+    -- Efeito no saldo de empregos: uma exclusão cancela o evento, com efeito inverso
+    -- (Leia-me do CAGED). Esta é a coluna que as análises devem somar.
+    saldo_efetivo   smallint GENERATED ALWAYS AS
+                    (CASE WHEN arquivo_tipo = 'EXC' THEN -saldo ELSE saldo END) STORED
 );
 
-CREATE INDEX ix_mov_competencia ON movimentacao (competencia);
+CREATE INDEX ix_mov_arquivo ON movimentacao (arquivo_tipo, competencia_declaracao);
+CREATE INDEX ix_mov_evento  ON movimentacao (competencia_evento);
