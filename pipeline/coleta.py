@@ -4,6 +4,8 @@ Idempotente: não baixa de novo um arquivo que já existe com o mesmo tamanho do
 extrai de novo um .txt que já existe.
 """
 import ftplib
+import shutil
+import tempfile
 from pathlib import Path
 
 import py7zr
@@ -51,13 +53,26 @@ def baixar(tipo: str, competencia: str, pasta_raw: Path) -> Path:
 
 
 def extrair(arquivo_7z: Path, pasta_saida: Path) -> Path:
-    """Extrai o .txt do .7z. Pula se o .txt já existir."""
+    """Extrai o .txt do .7z, de forma atômica.
+
+    Extrai para uma pasta temporária e só move para o nome final se o resultado estiver íntegro.
+    Assim, uma falha no meio (ex.: MemoryError) nunca deixa um .txt incompleto no lugar do final,
+    que seria reaproveitado na próxima tentativa. Um .txt final vazio é tratado como inexistente.
+    """
     pasta_saida.mkdir(parents=True, exist_ok=True)
     txt = pasta_saida / (arquivo_7z.stem + ".txt")
-    if txt.exists():
+    if txt.exists() and txt.stat().st_size > 0:
         return txt
-    with py7zr.SevenZipFile(arquivo_7z) as z:
-        z.extractall(path=pasta_saida)
-    if not txt.exists():
-        raise FileNotFoundError(f"{txt.name} não apareceu após extrair {arquivo_7z.name}")
+    txt.unlink(missing_ok=True)  # vazio/corrompido de uma tentativa anterior
+
+    tmp = Path(tempfile.mkdtemp(prefix=arquivo_7z.stem + "_", dir=pasta_saida))
+    try:
+        with py7zr.SevenZipFile(arquivo_7z) as z:
+            z.extractall(path=tmp)
+        saida = tmp / txt.name
+        if not saida.exists() or saida.stat().st_size == 0:
+            raise FileNotFoundError(f"{txt.name} veio vazio ou ausente ao extrair {arquivo_7z.name}")
+        saida.replace(txt)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
     return txt
