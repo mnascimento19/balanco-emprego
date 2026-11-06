@@ -1,3 +1,8 @@
 psycopg[binary]>=3.2
 openpyxl>=3.1
+py7zr>=0.22
+pandas>=2.2
+plotly>=5.24
+streamlit>=1.40
+prefect>=3.0
 pytest>=8

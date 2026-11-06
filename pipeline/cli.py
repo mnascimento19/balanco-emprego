@@ -1,5 +1,7 @@
 """Uso:
   python -m pipeline.cli schema
+  python -m pipeline.cli views
+  python -m pipeline.cli refresh
   python -m pipeline.cli dimensoes data/raw/layout.xlsx
   python -m pipeline.cli carga data/extracted/CAGEDMOV202510.txt [...]
 """
@@ -20,6 +22,11 @@ def main(argv):
         if cmd == "schema":
             for sql in sorted(Path("sql/schema").glob("*.sql")):
                 conn.execute(sql.read_text(encoding="utf-8"))
+        elif cmd == "views":
+            for sql in sorted(Path("sql/views").glob("*.sql")):
+                conn.execute(sql.read_text(encoding="utf-8"))
+        elif cmd == "refresh":
+            conn.execute("REFRESH MATERIALIZED VIEW mv_indicadores")
         elif cmd == "dimensoes":
             print(carregar_dimensoes(conn, args[0]))
         elif cmd == "carga":
