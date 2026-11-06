@@ -74,3 +74,16 @@ def test_codigo_fora_da_dimensao_aborta_a_carga(banco, amostra):
         carregar_arquivo(banco, amostra)
     assert contar(banco) == 0
     assert banco.execute("SELECT count(*) FROM carga_arquivo").fetchone()[0] == 0
+
+
+def test_salario_absurdo_vira_null_e_a_linha_e_mantida(banco, amostra):
+    """Regressão: um salário de 7,05e+10 (erro da fonte) derrubava a carga inteira."""
+    texto = amostra.read_text(encoding="utf-8").splitlines(keepends=True)
+    cab = texto[0].strip().split(";")
+    linha = texto[10].strip().split(";")
+    linha[cab.index("salário")] = "7,05e+10"
+    texto[10] = ";".join(linha) + chr(10)
+    amostra.write_text("".join(texto), encoding="utf-8")
+    assert carregar_arquivo(banco, amostra) == "carregado"
+    assert contar(banco) == 1001  # nenhuma linha perdida
+    assert banco.execute("SELECT count(*) FROM movimentacao WHERE salario IS NULL").fetchone()[0] >= 1

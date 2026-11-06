@@ -10,8 +10,11 @@ Desempenho: o arquivo vai cru para uma tabela temporária (COPY, sem parsing em 
 conversão de tipos é feita pelo Postgres num único INSERT ... SELECT.
 """
 import hashlib
+import logging
 import re
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 NOME_ARQUIVO = re.compile(r"^CAGED(MOV|FOR|EXC)(\d{6})\.txt$")
 
@@ -28,11 +31,13 @@ COLUNAS = [
     ("categoria", "categoria", "{c}::smallint"),
     ("grau_instrucao", "graudeinstrução", "{c}::smallint"),
     ("idade", "idade", "{c}::smallint"),
-    ("horas_contratuais", "horascontratuais", "replace({c}, ',', '.')::numeric"),
+    ("horas_contratuais", "horascontratuais",
+     "CASE WHEN abs(replace({c}, ',', '.')::numeric) >= 1000 THEN NULL ELSE replace({c}, ',', '.')::numeric END"),
     ("raca_cor", "raçacor", "{c}::smallint"),
     ("sexo", "sexo", "{c}::smallint"),
     ("tipo_movimentacao", "tipomovimentação", "{c}::smallint"),
-    ("salario", "salário", "replace({c}, ',', '.')::numeric"),
+    ("salario", "salário",
+     "CASE WHEN abs(replace({c}, ',', '.')::numeric) >= 10000000000 THEN NULL ELSE replace({c}, ',', '.')::numeric END"),
 ]
 
 
@@ -123,6 +128,17 @@ def carregar_arquivo(conn, caminho) -> str:
             desconhecidos = [r[0] for r in cur.fetchall()]
             if desconhecidos:
                 raise ValueError(f"{caminho.name}: códigos de {coluna} fora da dimensão {dim}: {desconhecidos}")
+
+        # Valores que não cabem na coluna (erro da fonte, ex.: salário de 7,05e+10) viram NULL e a
+        # linha é mantida, pois ela ainda conta para o saldo de empregos. Avisa quantas foram.
+        for coluna, limite in (("salario", 10**10), ("horas_contratuais", 1000)):
+            ref = posicao[origem_de[coluna]]
+            cur.execute(
+                f"SELECT count(*) FROM stg WHERE {ref} IS NOT NULL "
+                f"AND abs(replace({ref}, ',', '.')::numeric) >= {limite}"
+            )
+            if (n_ruins := cur.fetchone()[0]):
+                log.warning("%s: %d linha(s) com %s >= %s gravadas com NULL", caminho.name, n_ruins, coluna, limite)
 
         # 3) conversão de tipos e carga final, tudo dentro do Postgres
         destino = ", ".join(["arquivo_tipo", "competencia_declaracao"] + [c for c, _, _ in COLUNAS])
