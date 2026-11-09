@@ -42,7 +42,10 @@ def csv_pequeno(tmp_path, monkeypatch):
 def test_sem_banco_usa_o_csv_e_calcula_os_totais(csv_pequeno):
     at = AppTest.from_file(str(APP), default_timeout=60).run()
     assert not at.exception
-    assert any("Dados exportados" in i.value for i in at.info)  # avisa que não é ao vivo
+    assert any("exportados do banco" in c.value for c in at.caption)  # avisa que não é ao vivo
+    manchete = next(m.value for m in at.markdown if m.value.startswith("### "))
+    assert "novembro de 2025" in manchete and "+20 empregos formais" in manchete
+    assert "o mesmo resultado de outubro de 2025" in manchete  # nov e out somam +20
     saldo = {m.label: m.value for m in at.metric}
     assert saldo["Saldo de empregos"] == "+20"  # 10 + 10, último mês (202511)
     assert saldo["Admissões"] == "150"
@@ -61,3 +64,7 @@ def test_csv_real_do_repositorio_carrega(monkeypatch):
     at = AppTest.from_file(str(APP), default_timeout=60).run()
     assert not at.exception
     assert len(at.selectbox[0].options) == 12  # os 12 meses
+    setores = at.multiselect[1].options
+    assert "Comércio" in setores and not any("Reparação" in s for s in setores)  # nomes curtos
+    manchete = next(m.value for m in at.markdown if m.value.startswith("### "))
+    assert "setembro de 2026" in manchete and "+113.579" in manchete
