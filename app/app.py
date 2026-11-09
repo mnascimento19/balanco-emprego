@@ -1,4 +1,4 @@
-"""Pulso do Emprego: painel em Streamlit sobre o Novo CAGED.
+"""Balanço do Emprego: painel em Streamlit sobre o Novo CAGED.
 
 Lê a materialized view mv_indicadores (mês x estado x setor). Se o banco não estiver acessível
 (caso da versão publicada na nuvem), usa o arquivo exportado por `python -m pipeline.cli exportar`.
@@ -46,7 +46,7 @@ SETORES_CURTOS = {
     "transporte": "Transporte e logística",
 }
 
-st.set_page_config(page_title="Pulso do Emprego", page_icon="📈", layout="wide")
+st.set_page_config(page_title="Balanço do Emprego", page_icon="📈", layout="wide")
 
 
 def br(n) -> str:
@@ -139,7 +139,7 @@ except Exception as e:  # sem banco e sem arquivo exportado
 
 meses = sorted(dados["mes"].unique())
 
-st.title("Pulso do Emprego")
+st.title("Balanço do Emprego")
 st.caption(
     f"Quantos empregos formais o Brasil abriu ou fechou, mês a mês. "
     f"Novo CAGED, dados até {mes_extenso(meses[-1])}."
@@ -243,5 +243,5 @@ st.caption(
     "Fonte: Novo CAGED, Ministério do Trabalho e Emprego. Saldo = admissões − desligamentos, "
     "contando as exclusões declaradas. Mês = mês em que a informação foi declarada ao governo, por isso "
     "os valores podem diferir um pouco dos divulgados pelo Ministério, que usa outra base de contagem. "
-    f"{nota_origem} Código em github.com/mnascimento19/pulso-emprego."
+    f"{nota_origem} Código em github.com/mnascimento19/balanco-emprego."
 )

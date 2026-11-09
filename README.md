@@ -1,12 +1,12 @@
-# Pulso do Emprego
+# Balanço do Emprego
 
-![CI](https://github.com/mnascimento19/pulso-emprego/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/mnascimento19/balanco-emprego/actions/workflows/ci.yml/badge.svg)
 
 Quantos empregos formais o Brasil abriu ou fechou, mês a mês. Um pipeline de dados públicos do
 **Novo CAGED** (Ministério do Trabalho e Emprego): coleta automática, carga idempotente em Postgres,
 indicadores em SQL e um painel em Streamlit.
 
-**Painel online: https://pulso-emprego.streamlit.app**
+**Painel online: https://balanco-emprego.streamlit.app**
 
 ![Painel: saldo por setor](docs/img/painel-setores.png)
 
