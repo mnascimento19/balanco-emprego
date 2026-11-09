@@ -93,7 +93,8 @@ Os valores divulgados vêm de notícias que reproduzem os números do Ministéri
 **Um erro que a conferência pegou.** A primeira versão somava também os arquivos de declarações fora do
 prazo (`CAGEDFOR`) e de exclusões (`CAGEDEXC`) ao mês em que foram entregues. Esses arquivos trazem
 ajustes de meses *anteriores* (nenhuma linha deles era do próprio mês), então o painel misturava
-períodos e errava por até 7% (em março de 2026, 16.829 acima do certo). Os dois arquivos continuam no
+períodos. O erro chegou a 12,5% do saldo de um mês (julho de 2026: 51.236 no painel contra 58.568 reais)
+e, em número absoluto, a 16.829 (março de 2026). Os dois arquivos continuam no
 banco, para quem quiser estudar as revisões, mas a view do painel só usa o `CAGEDMOV`.
 
 ## Rodando localmente
