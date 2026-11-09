@@ -8,7 +8,7 @@ WITH por_setor AS (
         -sum(m.saldo_efetivo) FILTER (WHERE m.saldo = -1)    AS desligamentos,
         sum(m.saldo_efetivo)                                  AS saldo
     FROM movimentacao m
-    WHERE m.competencia_declaracao = '202510'
+    WHERE m.arquivo_tipo = 'MOV' AND m.competencia_declaracao = '202510'
     GROUP BY m.secao
 )
 SELECT

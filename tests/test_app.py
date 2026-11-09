@@ -67,7 +67,17 @@ def test_csv_real_do_repositorio_carrega(monkeypatch):
     setores = at.multiselect[1].options
     assert "Comércio" in setores and not any("Reparação" in s for s in setores)  # nomes curtos
     manchete = next(m.value for m in at.markdown if m.value.startswith("### "))
-    assert "setembro de 2026" in manchete and "113.579 empregos formais a mais do que fechou" in manchete
+    # o número oficial do Ministério para set/2026 é +121.305 (conferido), 44.522 a menos que ago/2026
+    assert "setembro de 2026" in manchete and "121.305 empregos formais a mais do que fechou" in manchete
+    assert "44.522 a menos que em agosto de 2026" in manchete
     estados = at.multiselect[0].options
     assert "Minas Gerais" in estados and "Minas gerais" not in estados  # grafia corrigida
     assert any("dados até setembro de 2026" in c.value for c in at.caption)
+
+
+def test_manchete_nomeia_o_estado_quando_ha_um_so_filtro(csv_pequeno):
+    at = AppTest.from_file(str(APP), default_timeout=60).run()
+    at.multiselect[0].select("Bahia").run()
+    manchete = next(m.value for m in at.markdown if m.value.startswith("### "))
+    assert "Bahia" in manchete and "recorte escolhido" not in manchete
+    assert "10 empregos formais a mais do que fechou" in manchete  # Bahia em nov/2025: 60 - 50

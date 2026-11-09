@@ -9,6 +9,6 @@ SELECT
           / NULLIF(sum(m.saldo_efetivo) FILTER (WHERE m.saldo = 1), 0), 1) AS saldo_pct_das_admissoes
 FROM movimentacao m
 JOIN uf u ON u.codigo = m.uf
-WHERE m.competencia_declaracao = '202510'
+WHERE m.arquivo_tipo = 'MOV' AND m.competencia_declaracao = '202510'
 GROUP BY u.descricao
 ORDER BY saldo DESC;

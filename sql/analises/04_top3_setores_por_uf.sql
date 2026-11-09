@@ -4,7 +4,7 @@
 WITH saldo_uf_setor AS (
     SELECT uf, secao, sum(saldo_efetivo) AS saldo
     FROM movimentacao
-    WHERE competencia_declaracao = '202510'
+    WHERE arquivo_tipo = 'MOV' AND competencia_declaracao = '202510'
     GROUP BY uf, secao
 ),
 ranqueado AS (

@@ -16,17 +16,16 @@ indicadores em SQL e um painel em Streamlit.
 
 Doze meses, de outubro de 2025 a setembro de 2026, cerca de 52,8 milhões de movimentações:
 
-- O saldo do período foi de **+803.706 empregos formais**.
-- **Dezembro de 2025** sozinho fechou em **−615.689**, um padrão sazonal do emprego formal. Sem ele, o
-  saldo dos outros onze meses é de +1,42 milhão. O melhor mês foi fevereiro de 2026 (+260.001).
-- Setores que mais geraram vagas: serviços administrativos (+166 mil), saúde (+141 mil) e
-  transporte (+104 mil). Os que mais perderam: agropecuária (−16,8 mil) e indústria de
-  transformação (−6,5 mil).
-- Estados: São Paulo (+138 mil), Rio de Janeiro (+90 mil) e Bahia (+77 mil) lideram. Tocantins
-  (+300) e Rio Grande do Sul (+1,9 mil) mal saíram do zero.
+- O saldo do período foi de **+798.419 empregos formais**.
+- **Dezembro de 2025** sozinho fechou em **−618.164**, um padrão sazonal do emprego formal. Sem ele, o
+  saldo dos outros onze meses é de +1,42 milhão. O melhor mês foi fevereiro de 2026 (+255.321).
+- Setores que mais geraram vagas: serviços administrativos (+187 mil), saúde (+148 mil) e
+  transporte (+105 mil). O que mais perdeu: agropecuária (−22,9 mil), seguida da indústria de
+  transformação (−5,4 mil).
+- Estados: São Paulo (+159 mil), Rio de Janeiro (+95 mil) e Bahia (+71 mil) lideram. Tocantins foi o
+  único com saldo negativo no período (−30), e Rondônia (+1,4 mil) mal saiu do zero.
 
-Esses números usam o **mês em que a informação foi declarada**. Veja "Conferência com os números
-oficiais" abaixo.
+Esses números são os mesmos que o Ministério divulga, como mostra a conferência abaixo.
 
 ## Como funciona
 
@@ -80,18 +79,22 @@ reinicia sozinho se o Docker cair.
 
 ## Conferência com os números oficiais
 
-O painel conta por **mês de declaração**; o Ministério divulga por mês do evento, com ajustes. Por
-isso os valores ficam um pouco abaixo dos divulgados:
+O saldo do painel é o do arquivo de movimentações declaradas no prazo (`CAGEDMOV`), e bate **exatamente**
+com os números divulgados pelo Ministério:
 
 | Mês | Divulgado | Painel | Diferença |
 |---|---|---|---|
-| Dezembro de 2025 | −618.164 | −615.689 | 0,4% |
-| Agosto de 2026 | +165.827 | +159.677 | 3,7% |
-| Setembro de 2026 | +121.305 | +113.579 | 6,4% |
+| Dezembro de 2025 | −618.164 | −618.164 | 0 |
+| Agosto de 2026 | +165.827 | +165.827 | 0 |
+| Setembro de 2026 | +121.305 | +121.305 | 0 |
 
-Os valores divulgados vêm de notícias que reproduzem os números do Ministério, não do painel
-oficial. A diferença maior em setembro não foi totalmente explicada. O sinal e a ordem de grandeza
-batem em todos os meses conferidos.
+Os valores divulgados vêm de notícias que reproduzem os números do Ministério, não do painel oficial.
+
+**Um erro que a conferência pegou.** A primeira versão somava também os arquivos de declarações fora do
+prazo (`CAGEDFOR`) e de exclusões (`CAGEDEXC`) ao mês em que foram entregues. Esses arquivos trazem
+ajustes de meses *anteriores* (nenhuma linha deles era do próprio mês), então o painel misturava
+períodos e errava por até 7% (em março de 2026, 16.829 acima do certo). Os dois arquivos continuam no
+banco, para quem quiser estudar as revisões, mas a view do painel só usa o `CAGEDMOV`.
 
 ## Rodando localmente
 
@@ -111,17 +114,21 @@ Para deixar a carga agendada (todo dia às 08:00, só carrega o que for novo):
 ## Painel online
 
 A versão publicada (Streamlit Community Cloud) não tem banco: ela lê `app/dados/indicadores.csv`, um
-recorte agregado (mês x estado x setor, 6.680 linhas, só números públicos) exportado do banco. O
+recorte agregado (mês x estado x setor, 6.640 linhas, só números públicos) exportado do banco. O
 painel tenta o banco primeiro e, se não conseguir, usa o arquivo. Os dados online ficam congelados
 até alguém rodar a exportação e enviar o arquivo atualizado:
 
 ```bash
-python -m pipeline.cli exportar
+python -m pipeline.cli exportar              # a partir do banco (view mv_indicadores)
+python -m pipeline.cli exportar-arquivos     # direto dos arquivos extraídos, sem banco nem Docker
 ```
+
+Os dois caminhos dão o mesmo resultado, e um teste garante isso.
 
 ## Testes
 
 Os testes rodam contra um Postgres real, com uma amostra de 1.000 linhas do arquivo de outubro de
 2025 (`tests/fixtures`): idempotência, arquivo republicado, rollback em falha no meio da carga,
-código fora do dicionário, salário absurdo, extração interrompida e o painel sem banco. O GitHub
+código fora do dicionário, salário absurdo, extração interrompida, equivalência entre a view e o CSV
+sem banco, e o painel sem banco. O GitHub
 Actions roda todos a cada push.

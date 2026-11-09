@@ -85,3 +85,27 @@ def test_salario_absurdo_vira_null_e_a_linha_e_mantida(banco, amostra):
     assert carregar_arquivo(banco, amostra) == "carregado"
     assert contar(banco) == 1001  # nenhuma linha perdida
     assert banco.execute("SELECT count(*) FROM movimentacao WHERE salario IS NULL").fetchone()[0] >= 1
+
+
+def test_view_so_conta_o_mov_e_bate_com_o_calculo_direto_dos_arquivos(banco, amostra):
+    """A view do painel usa só o CAGEDMOV (critério do Ministério) e o CSV sem banco é equivalente."""
+    import pandas as pd
+    from pandas.testing import assert_frame_equal
+
+    from pipeline.exportar import COLUNAS, indicadores_dos_arquivos
+
+    carregar_arquivo(banco, amostra)
+    fora_do_prazo = amostra.with_name("CAGEDFOR202510.txt")  # mesmo conteúdo, mas é o arquivo FOR
+    fora_do_prazo.write_text(amostra.read_text(encoding="utf-8"), encoding="utf-8")
+    carregar_arquivo(banco, fora_do_prazo)
+    assert contar(banco) == 2002  # os dois arquivos estão no banco...
+
+    banco.execute((Path(__file__).resolve().parent.parent / "sql" / "views" / "001_indicadores.sql")
+                  .read_text(encoding="utf-8"))
+    na_view = pd.DataFrame(
+        banco.execute(f"SELECT {', '.join(COLUNAS)} FROM mv_indicadores").fetchall(), columns=COLUNAS
+    ).sort_values(["mes", "estado", "setor"]).reset_index(drop=True)
+    assert na_view["saldo"].sum() == banco.execute(
+        "SELECT sum(saldo) FROM movimentacao WHERE arquivo_tipo = 'MOV'").fetchone()[0]  # ...mas a view só vê o MOV
+    direto = indicadores_dos_arquivos(amostra.parent, LAYOUT)  # só procura CAGEDMOV*.txt
+    assert_frame_equal(na_view, direto, check_dtype=False)

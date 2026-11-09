@@ -169,7 +169,14 @@ elif saldo < 0:
     resultado = f"fechou **{br(-saldo)} empregos formais a mais do que abriu**"
 else:
     resultado = "abriu **tantos empregos formais quanto fechou**"
-sujeito = "o recorte escolhido" if (estados or setores) else "o Brasil"
+if not estados and not setores:
+    sujeito = "o Brasil"
+elif len(estados) == 1 and not setores:
+    sujeito = estados[0]
+elif len(setores) == 1 and not estados:
+    sujeito = f"o setor {setores[0]}"
+else:
+    sujeito = "o recorte escolhido"
 frase = f"Em {mes_extenso(mes)}, {sujeito} {resultado}"
 if variacao == 0:
     frase += f", o mesmo resultado de {mes_extenso(anterior_mes)}"
@@ -202,7 +209,8 @@ with aba_setor:
         por["posição"] = por.groupby("estado")["saldo"].rank(method="first", ascending=False).astype(int)
         top3 = por[por["posição"] <= 3].sort_values(["estado", "posição"])
         top3.columns = ["Estado", "Setor", "Saldo", "Posição"]
-        st.dataframe(top3[["Estado", "Posição", "Setor", "Saldo"]], hide_index=True, width="stretch")
+        st.dataframe(top3[["Estado", "Posição", "Setor", "Saldo"]], hide_index=True, width="stretch",
+                     column_config={"Saldo": st.column_config.NumberColumn(format="localized")})
 
 with aba_uf:
     st.caption(f"Saldo por estado em {mes_legivel(mes)}")
@@ -232,7 +240,9 @@ with aba_tabela:
     st.caption(f"Dados de {mes_legivel(mes)}, por estado e setor")
     tabela = atual.groupby(["estado", "setor"], as_index=False)[["admissoes", "desligamentos", "saldo"]].sum()
     tabela.columns = ["Estado", "Setor", "Admissões", "Desligamentos", "Saldo"]
-    st.dataframe(tabela.sort_values("Saldo", ascending=False), hide_index=True, width="stretch")
+    numero = st.column_config.NumberColumn(format="localized")
+    st.dataframe(tabela.sort_values("Saldo", ascending=False), hide_index=True, width="stretch",
+                 column_config={"Admissões": numero, "Desligamentos": numero, "Saldo": numero})
 
 nota_origem = (
     f"Dados exportados do banco, com último mês em {mes_legivel(dados['mes'].max())}."
@@ -240,8 +250,7 @@ nota_origem = (
 )
 st.divider()
 st.caption(
-    "Fonte: Novo CAGED, Ministério do Trabalho e Emprego. Saldo = admissões − desligamentos, "
-    "contando as exclusões declaradas. Mês = mês em que a informação foi declarada ao governo, por isso "
-    "os valores podem diferir um pouco dos divulgados pelo Ministério, que usa outra base de contagem. "
-    f"{nota_origem} Código em github.com/mnascimento19/balanco-emprego."
+    "Fonte: Novo CAGED, Ministério do Trabalho e Emprego. Saldo = admissões − desligamentos, calculado "
+    "sobre o arquivo de movimentações declaradas no prazo (CAGEDMOV), o mesmo critério dos números "
+    f"divulgados pelo Ministério. {nota_origem} Código em github.com/mnascimento19/balanco-emprego."
 )
