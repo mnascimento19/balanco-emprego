@@ -245,7 +245,7 @@ with aba_tabela:
                  column_config={"Admissões": numero, "Desligamentos": numero, "Saldo": numero})
 
 nota_origem = (
-    f"Dados exportados do banco, com último mês em {mes_legivel(dados['mes'].max())}."
+    f"Dados pré-calculados, com último mês em {mes_legivel(dados['mes'].max())}."
     if origem == "arquivo" else "Dados lidos do banco local."
 )
 st.divider()

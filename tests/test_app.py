@@ -42,7 +42,7 @@ def csv_pequeno(tmp_path, monkeypatch):
 def test_sem_banco_usa_o_csv_e_calcula_os_totais(csv_pequeno):
     at = AppTest.from_file(str(APP), default_timeout=60).run()
     assert not at.exception
-    assert any("exportados do banco" in c.value for c in at.caption)  # avisa que não é ao vivo
+    assert any("pré-calculados" in c.value for c in at.caption)  # avisa que não é ao vivo
     manchete = next(m.value for m in at.markdown if m.value.startswith("### "))
     assert "novembro de 2025" in manchete and "20 empregos formais a mais do que fechou" in manchete
     assert "o mesmo resultado de outubro de 2025" in manchete  # nov e out somam +20

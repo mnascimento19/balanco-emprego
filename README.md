@@ -114,7 +114,7 @@ Para deixar a carga agendada (todo dia às 08:00, só carrega o que for novo):
 ## Painel online
 
 A versão publicada (Streamlit Community Cloud) não tem banco: ela lê `app/dados/indicadores.csv`, um
-recorte agregado (mês x estado x setor, 6.640 linhas, só números públicos) exportado do banco. O
+recorte agregado (mês x estado x setor, 6.640 linhas, só números públicos) pré-calculado. O
 painel tenta o banco primeiro e, se não conseguir, usa o arquivo. Os dados online ficam congelados
 até alguém rodar a exportação e enviar o arquivo atualizado:
 
