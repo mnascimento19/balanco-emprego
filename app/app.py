@@ -99,6 +99,7 @@ def carregar() -> tuple[pd.DataFrame, str]:
     for c in ("admissoes", "desligamentos", "saldo"):
         df[c] = df[c].astype(int)
     df["setor"] = df["setor"].map(setor_curto)
+    df["estado"] = df["estado"].replace({"Minas gerais": "Minas Gerais"})  # grafia do dicionário oficial
     return df, origem
 
 
@@ -136,10 +137,14 @@ except Exception as e:  # sem banco e sem arquivo exportado
     st.info("Suba o banco (`docker compose up -d`) e rode `python -m pipeline.cli views`.")
     st.stop()
 
-st.title("Radar do Emprego")
-st.markdown("##### Quantos empregos formais o Brasil abriu ou fechou, mês a mês")
-
 meses = sorted(dados["mes"].unique())
+
+st.title("Radar do Emprego")
+st.caption(
+    f"Quantos empregos formais o Brasil abriu ou fechou, mês a mês. "
+    f"Novo CAGED, dados até {mes_extenso(meses[-1])}."
+)
+
 f1, f2, f3 = st.columns([1, 2, 2])
 mes = f1.selectbox("Mês", meses, index=len(meses) - 1, format_func=mes_legivel)
 estados = f2.multiselect("Estados", sorted(dados["estado"].unique()), placeholder="Todos os estados")
@@ -158,11 +163,14 @@ anterior = filtrado[filtrado["mes"] == anterior_mes] if anterior_mes else None
 saldo = int(atual["saldo"].sum())
 variacao = int(saldo - anterior["saldo"].sum()) if anterior is not None else None
 
+if saldo > 0:
+    resultado = f"abriu **{br(saldo)} empregos formais a mais do que fechou**"
+elif saldo < 0:
+    resultado = f"fechou **{br(-saldo)} empregos formais a mais do que abriu**"
+else:
+    resultado = "abriu **tantos empregos formais quanto fechou**"
 sujeito = "o recorte escolhido" if (estados or setores) else "o Brasil"
-frase = (
-    f"Em {mes_extenso(mes)}, {sujeito} teve **saldo de {com_sinal(saldo)} empregos formais** "
-    f"({br(atual['admissoes'].sum())} admissões e {br(atual['desligamentos'].sum())} desligamentos)"
-)
+frase = f"Em {mes_extenso(mes)}, {sujeito} {resultado}"
 if variacao == 0:
     frase += f", o mesmo resultado de {mes_extenso(anterior_mes)}"
 elif variacao is not None:
@@ -170,10 +178,19 @@ elif variacao is not None:
 st.markdown(f"### {frase}.")
 
 c1, c2, c3 = st.columns(3)
-c1.metric("Saldo de empregos", com_sinal(saldo),
-          f"{com_sinal(variacao)} vs {mes_legivel(anterior_mes)}" if variacao is not None else None)
-c2.metric("Admissões", br(atual["admissoes"].sum()))
-c3.metric("Desligamentos", br(atual["desligamentos"].sum()))
+adm, desl = int(atual["admissoes"].sum()), int(atual["desligamentos"].sum())
+
+
+def vs_anterior(var) -> str | None:
+    return f"{com_sinal(var)} vs {mes_legivel(anterior_mes)}" if anterior is not None else None
+
+
+c1.metric("Saldo de empregos", com_sinal(saldo), vs_anterior(variacao), border=True)
+c2.metric("Admissões", br(adm), vs_anterior(adm - int(anterior["admissoes"].sum())) if anterior is not None else None,
+          border=True)
+c3.metric("Desligamentos", br(desl),
+          vs_anterior(desl - int(anterior["desligamentos"].sum())) if anterior is not None else None,
+          delta_color="inverse", border=True)  # mais desligamentos é pior: aumento fica vermelho
 
 aba_setor, aba_uf, aba_tempo, aba_tabela = st.tabs(["Por setor", "Por estado", "Evolução", "Tabela"])
 
@@ -201,10 +218,15 @@ with aba_tempo:
         hovertemplate="%{x}<br>Saldo: %{y:,.0f}<extra></extra>",
     ))
     fig.update_xaxes(title=None, type="category")
-    fig.update_yaxes(title=None, showgrid=True, gridcolor=GRADE, zeroline=True, zerolinecolor=GRADE)
+    passo = 200_000 if serie["saldo"].abs().max() > 300_000 else 100_000
+    marcas = list(range(int(serie["saldo"].min() // passo) * passo, int(serie["saldo"].max() // passo + 2) * passo, passo))
+    fig.update_yaxes(title=None, showgrid=True, gridcolor=GRADE, zeroline=True, zerolinecolor=GRADE,
+                     tickvals=marcas, ticktext=["0" if v == 0 else mil(v) for v in marcas])
     mostrar(estilo(fig, 380))
     if len(serie) < 2:
         st.info("Só há um mês nos dados; a evolução aparece quando houver mais meses.")
+    if any(m.endswith("12") for m in serie["mes"]):
+        st.caption("Dezembro costuma fechar no negativo: é um padrão sazonal do emprego formal no Brasil.")
 
 with aba_tabela:
     st.caption(f"Dados de {mes_legivel(mes)}, por estado e setor")
@@ -219,6 +241,7 @@ nota_origem = (
 st.divider()
 st.caption(
     "Fonte: Novo CAGED, Ministério do Trabalho e Emprego. Saldo = admissões − desligamentos, "
-    "contando as exclusões declaradas. Mês = mês em que a informação foi declarada ao governo. "
+    "contando as exclusões declaradas. Mês = mês em que a informação foi declarada ao governo, por isso "
+    "os valores podem diferir um pouco dos divulgados pelo Ministério, que usa outra base de contagem. "
     f"{nota_origem} Código em github.com/mnascimento19/radar-emprego."
 )
