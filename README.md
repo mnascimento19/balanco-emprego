@@ -32,7 +32,7 @@ Esses números são os mesmos que o Ministério divulga, como mostra a conferên
 ```
 FTP do governo ─► pipeline/coleta.py ─► data/raw (.7z) ─► data/extracted (.txt)
                                                                │
-   flows/carga_mensal.py (Prefect: retries, timeouts, agenda)  ▼
+   flows/carga_mensal.py (Prefect: retries, timeouts)          ▼
                                            pipeline/carga.py (COPY + validação, idempotente)
                                                                │
                                                       Postgres (movimentacao)
@@ -47,7 +47,7 @@ FTP do governo ─► pipeline/coleta.py ─► data/raw (.7z) ─► data/extra
 | `pipeline/coleta.py` | Baixa e extrai os arquivos mensais, sem rebaixar o que já existe e sem deixar arquivo incompleto |
 | `pipeline/carga.py` | Carga idempotente por arquivo, numa transação, com validação dos códigos |
 | `sql/schema`, `sql/views` | Dimensões, tabela de fatos e a view materializada que alimenta o painel |
-| `flows/carga_mensal.py` | Flow do Prefect: só processa meses novos, com retries e agenda diária |
+| `flows/carga_mensal.py` | Flow do Prefect (código aberto, sem conta): só processa meses novos, com tentativas automáticas e limites de tempo |
 | `app/app.py` | Painel com filtros por mês, estado e setor |
 | `sql/analises` | Cinco análises em SQL (CTEs e window functions) |
 
@@ -109,8 +109,17 @@ streamlit run app/app.py                               # painel em http://localh
 pytest                                                 # testes
 ```
 
-Para deixar a carga agendada (todo dia às 08:00, só carrega o que for novo):
-`python -m flows.servir`.
+**Agendamento (opcional).** O Prefect usado aqui é a biblioteca de código aberto: não precisa de conta
+nem de nuvem, e cada execução sobe um servidor temporário na sua máquina. Para a carga rodar sozinha
+todo dia às 08:00 (só carregando o que for novo) é preciso um servidor local, em dois terminais:
+
+```bash
+prefect server start                                                   # terminal 1
+PREFECT_API_URL=http://127.0.0.1:4200/api python -m flows.servir       # terminal 2
+```
+
+Sem o servidor, o `servir` recusa rodar, porque o Prefect não agenda nada nesse modo. O agendamento
+vale enquanto os dois processos estiverem rodando nesta máquina; não é um agendador na nuvem.
 
 ## Painel online
 
