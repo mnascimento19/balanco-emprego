@@ -85,10 +85,15 @@ com os números divulgados pelo Ministério:
 | Mês | Divulgado | Painel | Diferença |
 |---|---|---|---|
 | Dezembro de 2025 | −618.164 | −618.164 | 0 |
+| Julho de 2026 | +58.568 | +58.568 | 0 |
 | Agosto de 2026 | +165.827 | +165.827 | 0 |
 | Setembro de 2026 | +121.305 | +121.305 | 0 |
 
-Os valores divulgados vêm de notícias que reproduzem os números do Ministério, não do painel oficial.
+Em julho de 2026, os cinco estados com saldo negativo divulgados (ES −2.605, RS −903, TO −366,
+SC −248 e DF −134) também batem exatamente. Os valores divulgados vêm de notícias que reproduzem os
+números do Ministério, não do painel oficial.
+
+![Painel antes e depois da correção, comparado com o número oficial](docs/img/conferencia-oficial.png)
 
 **Um erro que a conferência pegou.** A primeira versão somava também os arquivos de declarações fora do
 prazo (`CAGEDFOR`) e de exclusões (`CAGEDEXC`) ao mês em que foram entregues. Esses arquivos trazem
