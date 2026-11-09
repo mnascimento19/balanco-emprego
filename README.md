@@ -36,6 +36,20 @@ FTP do governo ──► pipeline/coleta.py ──► data/raw (.7z) ──► d
                                                        app/app.py (Streamlit)
 ```
 
+## Painel publicado (Streamlit Community Cloud)
+
+A versão online não tem banco: ela lê `app/dados/indicadores.csv`, um recorte agregado (mês x estado
+x setor, ~6,7 mil linhas, só números públicos) exportado do banco. O painel tenta o banco primeiro e,
+se não conseguir, usa o arquivo, e avisa na tela qual das duas fontes está usando.
+
+```bash
+python -m pipeline.cli exportar     # regenera app/dados/indicadores.csv a partir do banco
+```
+
+Para publicar: em share.streamlit.io, "New app", escolha este repositório, branch `main` e o arquivo
+`app/app.py`. As dependências vêm de `app/requirements.txt` (só o necessário para o painel). Os dados
+da versão online ficam congelados até alguém rodar a exportação e enviar o arquivo atualizado.
+
 ## Idempotência e deduplicação
 
 O arquivo do governo não tem identificador de linha, e há movimentações idênticas

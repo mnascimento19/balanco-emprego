@@ -2,6 +2,7 @@
   python -m pipeline.cli schema
   python -m pipeline.cli views
   python -m pipeline.cli refresh
+  python -m pipeline.cli exportar [app/dados/indicadores.csv]
   python -m pipeline.cli dimensoes data/raw/layout.xlsx
   python -m pipeline.cli carga data/extracted/CAGEDMOV202510.txt [...]
 """
@@ -11,6 +12,7 @@ from pathlib import Path
 from .carga import carregar_arquivo
 from .db import conectar
 from .dimensoes import carregar_dimensoes
+from .exportar import CSV_PADRAO, exportar_indicadores
 
 
 def main(argv):
@@ -27,6 +29,9 @@ def main(argv):
                 conn.execute(sql.read_text(encoding="utf-8"))
         elif cmd == "refresh":
             conn.execute("REFRESH MATERIALIZED VIEW mv_indicadores")
+        elif cmd == "exportar":
+            destino = Path(args[0]) if args else CSV_PADRAO
+            print(f"{exportar_indicadores(conn, destino)} linhas -> {destino}")
         elif cmd == "dimensoes":
             print(carregar_dimensoes(conn, args[0]))
         elif cmd == "carga":

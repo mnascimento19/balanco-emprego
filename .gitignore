@@ -9,3 +9,7 @@ data/
 cdk.out/
 node_modules/
 .DS_Store
+
+# exceções: dados agregados e públicos que o painel publicado precisa
+!app/dados/*.csv
+!tests/fixtures/*.csv

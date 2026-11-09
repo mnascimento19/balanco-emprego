@@ -1,16 +1,19 @@
 """Radar do Emprego: painel em Streamlit sobre o Novo CAGED.
 
-Lê a materialized view mv_indicadores (mês x estado x setor). Execução:
+Lê a materialized view mv_indicadores (mês x estado x setor). Se o banco não estiver acessível
+(caso da versão publicada na nuvem), usa o arquivo exportado por `python -m pipeline.cli exportar`.
+Execução:
     streamlit run app/app.py
 """
 import os
+from pathlib import Path
 
 import pandas as pd
 import plotly.graph_objects as go
-import psycopg
 import streamlit as st
 
 DB_URL = os.environ.get("DATABASE_URL", "postgresql://radar:radar@localhost:5432/radar")
+CSV = Path(os.environ.get("INDICADORES_CSV", Path(__file__).parent / "dados" / "indicadores.csv"))
 POSITIVO, NEGATIVO = "#2a78d6", "#e34948"  # par divergente azul/vermelho: saldo positivo/negativo
 
 st.set_page_config(page_title="Radar do Emprego", page_icon="📊", layout="wide")
@@ -25,17 +28,25 @@ def mes_legivel(m: str) -> str:
     return f"{m[4:]}/{m[:4]}"
 
 
-@st.cache_data(ttl=300, show_spinner="Consultando o banco...")
-def carregar() -> pd.DataFrame:
-    with psycopg.connect(DB_URL) as conn:
-        cur = conn.execute(
-            "SELECT mes, estado, setor, admissoes, desligamentos, saldo FROM mv_indicadores"
-        )
-        colunas = [d.name for d in cur.description]
-        df = pd.DataFrame(cur.fetchall(), columns=colunas)
+@st.cache_data(ttl=300, show_spinner="Carregando os dados...")
+def carregar() -> tuple[pd.DataFrame, str]:
+    """Banco, se estiver acessível; senão o arquivo exportado. Devolve também a origem."""
+    try:
+        import psycopg  # fica de fora das dependências da versão publicada
+
+        with psycopg.connect(DB_URL, connect_timeout=3) as conn:
+            cur = conn.execute(
+                "SELECT mes, estado, setor, admissoes, desligamentos, saldo FROM mv_indicadores"
+            )
+            df = pd.DataFrame(cur.fetchall(), columns=[d.name for d in cur.description])
+        origem = "banco"
+    except Exception:
+        if not CSV.exists():
+            raise
+        df, origem = pd.read_csv(CSV, dtype={"mes": str}), "arquivo"
     for c in ("admissoes", "desligamentos", "saldo"):
         df[c] = df[c].astype(int)
-    return df
+    return df, origem
 
 
 def barras(df: pd.DataFrame, rotulo: str, topo: int | None = None) -> go.Figure:
@@ -59,8 +70,8 @@ def barras(df: pd.DataFrame, rotulo: str, topo: int | None = None) -> go.Figure:
 
 
 try:
-    dados = carregar()
-except Exception as e:  # banco fora do ar ou view ainda não criada
+    dados, origem = carregar()
+except Exception as e:  # sem banco e sem arquivo exportado
     st.error(f"Não consegui ler os dados: {e}")
     st.info("Suba o banco (`docker compose up -d`) e rode `python -m pipeline.cli views`.")
     st.stop()
@@ -70,6 +81,11 @@ st.caption(
     "Saldo de empregos formais no Brasil (Novo CAGED). Saldo = admissões − desligamentos, "
     "contando exclusões declaradas. Mês = mês em que a informação foi declarada ao governo."
 )
+if origem == "arquivo":
+    st.info(
+        f"Dados exportados do banco, com último mês em {mes_legivel(dados['mes'].max())}. "
+        "Esta versão não consulta o banco ao vivo; o código está no GitHub."
+    )
 
 meses = sorted(dados["mes"].unique())
 with st.sidebar:
